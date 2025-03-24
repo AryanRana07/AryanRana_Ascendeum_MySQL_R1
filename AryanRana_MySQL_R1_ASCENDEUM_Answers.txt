@@ -1,0 +1,81 @@
+Q1. Write a query to calculate the average age of employees in each department.
+
+A1. 
+select d.id, d.name, avg(age)
+from departments d
+left join employees e
+on d.id = e.department_id
+group by d.id;
+
+Output:
++----+------------+----------+
+| id | name       | avg(age) |
++----+------------+----------+
+|  1 | IT         |  37.5500 |
+|  2 | HR         |  38.4000 |
+|  3 | Finance    |  41.4500 |
+|  4 | Marketing  |  41.4000 |
+|  5 | Operations |  38.5500 |
++----+------------+----------+
+
+==================================================================
+
+Q2. Write a query to find the department with the highest number of employees whose age is above 40.
+
+A2.
+select d.name, count(e.id) as c
+from departments d
+left join employees e
+on d.id = e.department_id
+where e.age > 40
+group by e.department_id
+order by c desc
+limit 1;
+
+Output:
+
++------------+-----+
+| name       | c   |
++------------+-----+
+| Operations | 101 |
++------------+-----+
+
+
+
+Q3. Write a query to retrieve the count of employees who have in joined in last 100 days.
+
+A3.
+select count(e.id) from employees e where joining_date >= 20241214
+
+Output:
+
++-------------+
+| count(e.id) |
++-------------+
+|         100 |
++-------------+
+or
+The alternate method(the trraditional approach) to do this is subtract 100 from the curdate and in the where clause.
+
+
+
+Q4. Write a query to update the joining date of all employees in the HR department to the yesterday.
+
+A4.
+update employees e
+set e.joining_date = (select curdate()-1)
+where department_id in
+(select d.id from departments d where d.name = 'HR');
+
+Q5. Write a query to retrieve the count of employees who have in joined in last 100 days.
+
+A5.
+select count(e.id) from employees e where joining_date >= 20241214
+
+Output:
+
++-------------+
+| count(e.id) |
++-------------+
+|         280 |
++-------------+
