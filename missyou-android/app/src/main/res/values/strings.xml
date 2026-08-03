@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">Missing You</string>
+    <string name="service_channel_name">Missing You connection</string>
+    <string name="service_notification_text">Staying connected to your partner</string>
+    <string name="alert_channel_name">Missing You alerts</string>
+</resources>

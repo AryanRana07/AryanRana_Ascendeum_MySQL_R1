@@ -129,6 +129,16 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("draw-emoji", (stamp) => {
+    if (!userId || !users.has(userId)) return;
+    const me = users.get(userId);
+    if (!me.partnerId) return;
+    const partner = users.get(me.partnerId);
+    if (partner?.socketId) {
+      io.to(partner.socketId).emit("draw-emoji", stamp);
+    }
+  });
+
   socket.on("clear-canvas", () => {
     if (!userId || !users.has(userId)) return;
     const me = users.get(userId);

@@ -1,0 +1,13 @@
+<resources>
+    <color name="pink_deep">#FF4D6D</color>
+    <color name="pink">#FF8FAB</color>
+    <color name="pink_light">#FFE1E9</color>
+    <color name="purple">#7C3AED</color>
+    <color name="blue">#3B82F6</color>
+    <color name="ink">#111827</color>
+    <color name="text_main">#3D2B3A</color>
+    <color name="text_soft">#8A6B80</color>
+    <color name="white">#FFFFFF</color>
+    <color name="overlay_dim">#B3241521</color>
+    <color name="canvas_bg">#33FFFFFF</color>
+</resources>
