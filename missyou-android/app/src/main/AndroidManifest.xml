@@ -42,7 +42,7 @@
             android:exported="false"
             android:excludeFromRecents="true"
             android:launchMode="singleInstance"
-            android:theme="@style/Theme.MissYou.Overlay" />
+            android:theme="@style/Theme.MissYou" />
 
         <service
             android:name=".MissYouService"

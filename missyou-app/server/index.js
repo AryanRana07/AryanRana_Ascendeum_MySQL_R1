@@ -38,7 +38,7 @@ io.on("connection", (socket) => {
   let userId = null;
   console.log(`[connect] socket=${socket.id} transport=${socket.conn.transport.name}`);
 
-  socket.on("identify", ({ userId: existingId, name }) => {
+  socket.on("identify", ({ userId: existingId, name } = {}) => {
     userId = existingId || nanoid(10);
     console.log(`[identify] socket=${socket.id} userId=${userId} name=${name}`);
     const existing = users.get(userId);
@@ -57,25 +57,33 @@ io.on("connection", (socket) => {
       paired: !!me.partnerId,
     });
 
-    // If already paired, tell partner we're back online
+    // If already paired: tell the partner we're back online, and tell
+    // ourselves whether the partner is currently online too - this used to
+    // be one-directional (only the side that just (re)connected notified
+    // the other), so if your partner was already online before you opened
+    // the app, you'd never find out.
     if (me.partnerId && users.has(me.partnerId)) {
       const partner = users.get(me.partnerId);
-      io.to(partner.socketId).emit("partner-online");
+      if (partner.socketId) io.to(partner.socketId).emit("partner-online");
+      socket.emit(partner.socketId ? "partner-online" : "partner-offline");
     }
   });
 
   socket.on("create-pairing-code", () => {
     console.log(`[create-pairing-code] socket=${socket.id} userId=${userId} knownUser=${users.has(userId)}`);
     if (!userId || !users.has(userId)) return;
-    const code = makeCode();
     const user = users.get(userId);
+    // Drop any earlier code this user generated but never used, so it can't
+    // still be redeemed after they've moved on to a new one.
+    if (user.pairingCode) pendingCodes.delete(user.pairingCode);
+    const code = makeCode();
     user.pairingCode = code;
     pendingCodes.set(code, userId);
     console.log(`[create-pairing-code] issued code=${code} for userId=${userId}`);
     socket.emit("pairing-code", { code });
   });
 
-  socket.on("redeem-pairing-code", ({ code }) => {
+  socket.on("redeem-pairing-code", ({ code } = {}) => {
     console.log(`[redeem-pairing-code] socket=${socket.id} userId=${userId} code=${code}`);
     if (!userId || !users.has(userId)) return;
     const ownerId = pendingCodes.get((code || "").toUpperCase());
@@ -94,6 +102,19 @@ io.on("connection", (socket) => {
     if (!owner) {
       socket.emit("pairing-error", { message: "That person is no longer available" });
       return;
+    }
+
+    // Either side might already have a different partner (e.g. a reinstall that
+    // never explicitly unlinked first). Clear that stale link on the old
+    // partner's end too, so they don't keep pointing at someone who's moved on.
+    for (const existingPartnerId of [me.partnerId, owner.partnerId]) {
+      if (existingPartnerId && existingPartnerId !== ownerId && existingPartnerId !== userId) {
+        const stalePartner = users.get(existingPartnerId);
+        if (stalePartner) {
+          stalePartner.partnerId = null;
+          if (stalePartner.socketId) io.to(stalePartner.socketId).emit("partner-unlinked");
+        }
+      }
     }
 
     me.partnerId = ownerId;
@@ -118,7 +139,7 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("miss-you-response", ({ accepted }) => {
+  socket.on("miss-you-response", ({ accepted } = {}) => {
     if (!userId || !users.has(userId)) return;
     const me = users.get(userId);
     if (!me.partnerId) return;
@@ -211,4 +232,13 @@ io.on("connection", (socket) => {
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`MissYou server listening on port ${PORT}`);
+});
+
+// Last-resort net: an uncaught exception anywhere (a bad payload we didn't
+// anticipate, etc.) would otherwise crash the whole process and disconnect
+// both users at once. Logging and staying up beats that, even though the
+// process is technically in an "unknown" state afterwards - for two users
+// and no persistent data worth corrupting, availability wins here.
+process.on("uncaughtException", (err) => {
+  console.error("[uncaughtException]", err);
 });

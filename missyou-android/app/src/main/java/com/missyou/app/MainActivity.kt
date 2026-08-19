@@ -16,6 +16,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.missyou.app.databinding.ActivityMainBinding
 import io.socket.client.Socket
+import io.socket.emitter.Emitter
 import org.json.JSONObject
 
 class MainActivity : AppCompatActivity() {
@@ -23,6 +24,45 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private var socket: Socket? = null
     private var waitingForResponse = false
+
+    // Named references (not inline lambdas) so attachListeners() can remove *only* this
+    // Activity's own registration with off(event, listener) - a blanket off(event) with no
+    // listener argument removes every listener for that event name on the shared socket,
+    // including ones SocketHolder or MissYouService registered for the same event. That
+    // was silently deleting SocketHolder's EVENT_CONNECT listener (the one that sends
+    // "identify" on every fresh connect) the moment this Activity attached its own.
+    private val connectListener = Emitter.Listener { runOnUiThread { updateStatusBanner() } }
+    private val disconnectListener = Emitter.Listener { runOnUiThread { updateStatusBanner() } }
+
+    private val pairedListener = Emitter.Listener { args ->
+        val data = args.getOrNull(0) as? JSONObject ?: return@Listener
+        Prefs.setPartnerId(this, data.optString("partnerId", null))
+        Prefs.setPartnerName(this, data.optString("partnerName", null))
+        runOnUiThread {
+            showGroup(binding.homeGroup)
+            updatePartnerStatus(true)
+        }
+    }
+
+    private val missYouReceivedListener = Emitter.Listener { args ->
+        val data = args.getOrNull(0) as? JSONObject
+        val fromName = data?.optString("fromName")?.takeIf { it.isNotBlank() }
+            ?: Prefs.getPartnerName(this)
+            ?: "Your partner"
+        // Belt-and-suspenders: MissYouService already shows a full-screen-intent
+        // notification for this, but that path silently does nothing if notification
+        // permission was denied. Since this app is currently in the foreground (it's
+        // alive and attached to this socket), we can launch the popup directly too -
+        // this path doesn't depend on notification permission at all.
+        val intent = Intent(applicationContext, LockPopupActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(Constants.EXTRA_FROM_NAME, fromName)
+        }
+        applicationContext.startActivity(intent)
+    }
+
+    private val partnerOnlineListener = Emitter.Listener { runOnUiThread { updatePartnerStatus(true) } }
+    private val partnerOfflineListener = Emitter.Listener { runOnUiThread { updatePartnerStatus(false) } }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -211,31 +251,24 @@ class MainActivity : AppCompatActivity() {
     // Each .off() before .on() keeps this idempotent - onCreate (and therefore this
     // function) can run again if Android recreates the Activity, and without .off()
     // the shared SocketHolder.socket singleton would accumulate duplicate listeners.
+    // Events also used elsewhere (SocketHolder, MissYouService) use the two-argument
+    // off(event, listener) form with a named listener reference, so this only ever
+    // removes its own registration - see the listener field comments above.
     private fun attachListeners() {
         val s = socket ?: return
 
-        s.off(Socket.EVENT_CONNECT)
-        s.on(Socket.EVENT_CONNECT) { runOnUiThread { updateStatusBanner() } }
-        s.off(Socket.EVENT_DISCONNECT)
-        s.on(Socket.EVENT_DISCONNECT) { runOnUiThread { updateStatusBanner() } }
-
-        s.off("miss-you-received")
-        s.on("miss-you-received") { args ->
-            val data = args.getOrNull(0) as? JSONObject
-            val fromName = data?.optString("fromName")?.takeIf { it.isNotBlank() }
-                ?: Prefs.getPartnerName(this)
-                ?: "Your partner"
-            // Belt-and-suspenders: MissYouService already shows a full-screen-intent
-            // notification for this, but that path silently does nothing if notification
-            // permission was denied. Since this app is currently in the foreground (it's
-            // alive and attached to this socket), we can launch the popup directly too -
-            // this path doesn't depend on notification permission at all.
-            val intent = Intent(applicationContext, LockPopupActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                putExtra(Constants.EXTRA_FROM_NAME, fromName)
-            }
-            applicationContext.startActivity(intent)
-        }
+        s.off(Socket.EVENT_CONNECT, connectListener)
+        s.on(Socket.EVENT_CONNECT, connectListener)
+        s.off(Socket.EVENT_DISCONNECT, disconnectListener)
+        s.on(Socket.EVENT_DISCONNECT, disconnectListener)
+        s.off("miss-you-received", missYouReceivedListener)
+        s.on("miss-you-received", missYouReceivedListener)
+        s.off("paired", pairedListener)
+        s.on("paired", pairedListener)
+        s.off("partner-online", partnerOnlineListener)
+        s.on("partner-online", partnerOnlineListener)
+        s.off("partner-offline", partnerOfflineListener)
+        s.on("partner-offline", partnerOfflineListener)
 
         s.off("partner-unlinked")
         s.on("partner-unlinked") {
@@ -252,17 +285,6 @@ class MainActivity : AppCompatActivity() {
             val data = args.getOrNull(0) as? JSONObject ?: return@on
             val code = data.optString("code")
             runOnUiThread { binding.pairingCodeText.text = code }
-        }
-
-        s.off("paired")
-        s.on("paired") { args ->
-            val data = args.getOrNull(0) as? JSONObject ?: return@on
-            Prefs.setPartnerId(this, data.optString("partnerId", null))
-            Prefs.setPartnerName(this, data.optString("partnerName", null))
-            runOnUiThread {
-                showGroup(binding.homeGroup)
-                updatePartnerStatus(true)
-            }
         }
 
         s.off("pairing-error")
