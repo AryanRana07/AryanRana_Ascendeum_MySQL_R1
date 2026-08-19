@@ -130,6 +130,10 @@ class MainActivity : AppCompatActivity() {
             binding.pairingChooseGroup.visibility = android.view.View.GONE
             binding.pairingCreateGroup.visibility = android.view.View.VISIBLE
             binding.pairingCodeText.text = if (socket?.connected() == true) "..." else "Not connected"
+            // Re-send identify right before this - the server drops
+            // create-pairing-code silently if it doesn't know our userId yet,
+            // and we've seen that race actually happen in practice.
+            SocketHolder.identify(this)
             socket?.emit("create-pairing-code")
         }
         binding.haveCodeButton.setOnClickListener {
@@ -153,6 +157,7 @@ class MainActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
             binding.pairingErrorText.visibility = android.view.View.GONE
+            SocketHolder.identify(this)
             val payload = JSONObject().put("code", code)
             socket?.emit("redeem-pairing-code", payload)
         }

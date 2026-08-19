@@ -15,7 +15,15 @@ object SocketHolder {
     fun connect(context: Context): Socket {
         val existing = socket
         if (existing != null) {
-            if (!existing.connected()) existing.connect()
+            if (existing.connected()) {
+                // Already connected from an earlier call in this process - the
+                // EVENT_CONNECT listener below (which sends identify) only fires on
+                // a fresh connect, so nothing re-sends identify on this path unless
+                // we do it explicitly here.
+                identify(context)
+            } else {
+                existing.connect()
+            }
             return existing
         }
 
