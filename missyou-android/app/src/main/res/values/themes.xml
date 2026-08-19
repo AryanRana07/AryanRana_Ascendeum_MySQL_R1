@@ -20,4 +20,21 @@
         <item name="android:windowIsFloating">false</item>
         <item name="android:backgroundDimEnabled">true</item>
     </style>
+
+    <!--
+        DrawingActivity's theme: unlike Theme.MissYou.Transparent (the accept/decline
+        popup, which wants a dimmed backdrop), this has no dim at all - the point is for
+        the real lock screen wallpaper to show through behind the canvas, so the app
+        genuinely draws "on top of the lock screen" rather than on an opaque card.
+    -->
+    <style name="Theme.MissYou.Overlay">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
 </resources>

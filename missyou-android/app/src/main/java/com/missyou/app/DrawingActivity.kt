@@ -1,18 +1,25 @@
 package com.missyou.app
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Base64
 import android.view.Gravity
 import android.view.WindowManager
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.ContentInfoCompat
+import androidx.core.view.ViewCompat
 import com.missyou.app.databinding.ActivityDrawingBinding
 import io.socket.client.Socket
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 
 private data class BrushStyle(val label: String, val widthDp: Float, val alpha: Int)
 
@@ -37,12 +44,15 @@ class DrawingActivity : AppCompatActivity() {
 
         binding = ActivityDrawingBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        @Suppress("DEPRECATION")
+        overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
 
         socket = SocketHolder.connect(applicationContext)
 
         buildColorRow()
         buildStyleRow()
         buildEmojiRow()
+        setupStickerInput()
         wireDrawingCallbacks()
         attachSocketListeners()
 
@@ -130,6 +140,57 @@ class DrawingActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Gboard (and most keyboards) can send an image/GIF sticker straight into any input
+     * field via the "commit content" API - this just needs a focusable input that declares
+     * it accepts image mime types. We don't care about the sticker's accompanying text,
+     * only the image, which we place on the canvas like an emoji stamp.
+     *
+     * Note: an animated GIF is decoded to its first frame only (BitmapFactory doesn't
+     * animate), so GIFs land as a static image rather than looping - most Gboard "stickers"
+     * are already static PNGs, so this covers the common case.
+     */
+    private fun setupStickerInput() {
+        ViewCompat.setOnReceiveContentListener(
+            binding.stickerInput, arrayOf("image/*")
+        ) { _, payload ->
+            val split = payload.partition { item -> item.uri != null }
+            val uriContent = split.first
+            if (uriContent != null) {
+                for (i in 0 until uriContent.clip.itemCount) {
+                    val uri = uriContent.clip.getItemAt(i).uri ?: continue
+                    val bitmap = decodeDownscaledBitmap(uri)
+                    if (bitmap != null) {
+                        binding.drawingView.placeImage(bitmap)
+                    } else {
+                        Toast.makeText(this, "Couldn't load that sticker", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            binding.stickerInput.setText("")
+            split.second
+        }
+    }
+
+    private fun decodeDownscaledBitmap(uri: Uri, maxDimensionPx: Int = 400): Bitmap? {
+        return try {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            contentResolver.openInputStream(uri)?.use {
+                BitmapFactory.decodeStream(it, null, bounds)
+            }
+            var sampleSize = 1
+            val largestSide = maxOf(bounds.outWidth, bounds.outHeight)
+            while (largestSide / sampleSize > maxDimensionPx) sampleSize *= 2
+
+            val options = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+            contentResolver.openInputStream(uri)?.use {
+                BitmapFactory.decodeStream(it, null, options)
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     private fun wireDrawingCallbacks() {
         binding.drawingView.onStrokeDrawn = { seg ->
             val payload = JSONObject().apply {
@@ -150,6 +211,18 @@ class DrawingActivity : AppCompatActivity() {
                 put("emoji", stamp.emoji)
             }
             socket?.emit("draw-emoji", payload)
+        }
+        binding.drawingView.onImagePlaced = { stamp ->
+            val bytes = ByteArrayOutputStream().use { out ->
+                stamp.bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                out.toByteArray()
+            }
+            val payload = JSONObject().apply {
+                put("x", stamp.x)
+                put("y", stamp.y)
+                put("image", Base64.encodeToString(bytes, Base64.NO_WRAP))
+            }
+            socket?.emit("draw-sticker", payload)
         }
     }
 
@@ -187,6 +260,24 @@ class DrawingActivity : AppCompatActivity() {
             runOnUiThread { binding.drawingView.addRemoteEmoji(stamp) }
         }
 
+        s.off("draw-sticker")
+        s.on("draw-sticker") { args ->
+            val data = args.getOrNull(0) as? JSONObject ?: return@on
+            val base64 = data.optString("image")
+            val bitmap = try {
+                val bytes = Base64.decode(base64, Base64.NO_WRAP)
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            } catch (e: Exception) {
+                null
+            } ?: return@on
+            val stamp = ImageStamp(
+                x = data.optDouble("x", 0.5).toFloat(),
+                y = data.optDouble("y", 0.5).toFloat(),
+                bitmap = bitmap
+            )
+            runOnUiThread { binding.drawingView.addRemoteImage(stamp) }
+        }
+
         s.off("clear-canvas")
         s.on("clear-canvas") {
             runOnUiThread { binding.drawingView.clearAll() }
@@ -200,10 +291,17 @@ class DrawingActivity : AppCompatActivity() {
         }
     }
 
+    override fun finish() {
+        super.finish()
+        @Suppress("DEPRECATION")
+        overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         socket?.off("draw-stroke")
         socket?.off("draw-emoji")
+        socket?.off("draw-sticker")
         socket?.off("clear-canvas")
         socket?.off("partner-left-canvas")
         NotificationHelper.clearCanvasAlert(this)

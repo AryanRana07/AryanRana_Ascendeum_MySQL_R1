@@ -87,5 +87,19 @@
                 android:layout_height="wrap_content"
                 android:orientation="horizontal" />
         </HorizontalScrollView>
+
+        <EditText
+            android:id="@+id/stickerInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/bg_code_box"
+            android:hint="Tap here, then use your keyboard's sticker/GIF button 💌"
+            android:textColorHint="@color/text_soft"
+            android:textColor="@color/text_main"
+            android:textSize="13sp"
+            android:padding="12dp"
+            android:maxLines="1"
+            android:inputType="text" />
     </LinearLayout>
 </LinearLayout>

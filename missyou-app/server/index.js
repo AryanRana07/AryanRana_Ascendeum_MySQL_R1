@@ -139,6 +139,16 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("draw-sticker", (stamp) => {
+    if (!userId || !users.has(userId)) return;
+    const me = users.get(userId);
+    if (!me.partnerId) return;
+    const partner = users.get(me.partnerId);
+    if (partner?.socketId) {
+      io.to(partner.socketId).emit("draw-sticker", stamp);
+    }
+  });
+
   socket.on("clear-canvas", () => {
     if (!userId || !users.has(userId)) return;
     const me = users.get(userId);
@@ -156,6 +166,18 @@ io.on("connection", (socket) => {
     const partner = users.get(me.partnerId);
     if (partner?.socketId) {
       io.to(partner.socketId).emit("partner-left-canvas");
+    }
+  });
+
+  socket.on("unlink", () => {
+    if (!userId || !users.has(userId)) return;
+    const me = users.get(userId);
+    if (!me.partnerId) return;
+    const partner = users.get(me.partnerId);
+    me.partnerId = null;
+    if (partner) {
+      partner.partnerId = null;
+      if (partner.socketId) io.to(partner.socketId).emit("partner-unlinked");
     }
   });
 

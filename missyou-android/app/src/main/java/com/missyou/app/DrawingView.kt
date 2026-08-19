@@ -1,9 +1,11 @@
 package com.missyou.app
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
@@ -15,6 +17,8 @@ data class StrokeSegment(
 )
 
 data class EmojiStamp(val x: Float, val y: Float, val emoji: String)
+
+data class ImageStamp(val x: Float, val y: Float, val bitmap: Bitmap, val sizeDp: Float = 90f)
 
 /**
  * All coordinates are stored relative (0f..1f) to the view's size so strokes line up
@@ -30,9 +34,12 @@ class DrawingView @JvmOverloads constructor(
 
     var onStrokeDrawn: ((StrokeSegment) -> Unit)? = null
     var onEmojiPlaced: ((EmojiStamp) -> Unit)? = null
+    var onImagePlaced: ((ImageStamp) -> Unit)? = null
 
     private val segments = mutableListOf<StrokeSegment>()
     private val stamps = mutableListOf<EmojiStamp>()
+    private val imageStamps = mutableListOf<ImageStamp>()
+    private val imageDestRect = RectF()
 
     private var lastRelX = 0f
     private var lastRelY = 0f
@@ -63,6 +70,14 @@ class DrawingView @JvmOverloads constructor(
         emojiPaint.textSize = dpToPx(40f)
         for (stamp in stamps) {
             canvas.drawText(stamp.emoji, stamp.x * w, stamp.y * h, emojiPaint)
+        }
+
+        for (stamp in imageStamps) {
+            val half = dpToPx(stamp.sizeDp) / 2f
+            val cx = stamp.x * w
+            val cy = stamp.y * h
+            imageDestRect.set(cx - half, cy - half, cx + half, cy + half)
+            canvas.drawBitmap(stamp.bitmap, null, imageDestRect, null)
         }
     }
 
@@ -114,9 +129,24 @@ class DrawingView @JvmOverloads constructor(
         onEmojiPlaced?.invoke(stamp)
     }
 
+    fun addRemoteImage(stamp: ImageStamp) {
+        imageStamps.add(stamp)
+        invalidate()
+    }
+
+    fun placeImage(bitmap: Bitmap) {
+        val x = 0.2f + Random.nextFloat() * 0.6f
+        val y = 0.2f + Random.nextFloat() * 0.6f
+        val stamp = ImageStamp(x, y, bitmap)
+        imageStamps.add(stamp)
+        invalidate()
+        onImagePlaced?.invoke(stamp)
+    }
+
     fun clearAll() {
         segments.clear()
         stamps.clear()
+        imageStamps.clear()
         invalidate()
     }
 

@@ -11,8 +11,21 @@ android {
         applicationId = "com.missyou.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
+    }
+
+    signingConfigs {
+        getByName("debug") {
+            // Pinned so every CI build shares the same signature - otherwise each
+            // GitHub Actions run is a fresh machine that generates its own random
+            // debug keystore, and Android refuses to install over a differently
+            // signed APK without an uninstall first.
+            storeFile = file("../keystore/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {

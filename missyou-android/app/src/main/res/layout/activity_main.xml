@@ -227,9 +227,21 @@
                 android:id="@+id/partnerStatusText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="24dp"
+                android:layout_marginBottom="8dp"
                 android:gravity="center"
                 android:textColor="@color/text_soft" />
+
+            <TextView
+                android:id="@+id/statusBannerText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/bg_code_box"
+                android:gravity="center"
+                android:padding="10dp"
+                android:textColor="@color/pink_deep"
+                android:textSize="13sp"
+                android:visibility="gone" />
 
             <Button
                 android:id="@+id/missYouButton"
@@ -249,6 +261,17 @@
                 android:gravity="center"
                 android:textColor="@color/text_soft"
                 android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/unlinkText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:layout_gravity="center"
+                android:padding="8dp"
+                android:text="Unlink from partner"
+                android:textColor="@color/text_soft"
+                android:textSize="13sp" />
         </LinearLayout>
 
     </FrameLayout>
