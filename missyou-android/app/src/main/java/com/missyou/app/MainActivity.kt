@@ -83,7 +83,7 @@ class MainActivity : AppCompatActivity() {
         binding.generateCodeButton.setOnClickListener {
             binding.pairingChooseGroup.visibility = android.view.View.GONE
             binding.pairingCreateGroup.visibility = android.view.View.VISIBLE
-            binding.pairingCodeText.text = "..."
+            binding.pairingCodeText.text = if (socket?.connected() == true) "..." else "Not connected"
             socket?.emit("create-pairing-code")
         }
         binding.haveCodeButton.setOnClickListener {
@@ -101,6 +101,12 @@ class MainActivity : AppCompatActivity() {
         binding.linkUpButton.setOnClickListener {
             val code = binding.codeInput.text?.toString()?.trim()?.uppercase().orEmpty()
             if (code.length < 4) return@setOnClickListener
+            if (socket?.connected() != true) {
+                binding.pairingErrorText.visibility = android.view.View.VISIBLE
+                binding.pairingErrorText.text = "Not connected to the server yet - check your internet and try again"
+                return@setOnClickListener
+            }
+            binding.pairingErrorText.visibility = android.view.View.GONE
             val payload = JSONObject().put("code", code)
             socket?.emit("redeem-pairing-code", payload)
         }
