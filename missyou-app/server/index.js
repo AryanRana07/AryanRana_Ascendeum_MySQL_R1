@@ -184,6 +184,30 @@ io.on("connection", (socket) => {
     }
   });
 
+  // Generic sync for moving/resizing/rotating an already-placed emoji or
+  // image sticker (identified by the id it was placed with), and for
+  // deleting any element by id - a stroke (by its strokeId) or a sticker.
+  // Both undo and the eraser tool go through delete-element.
+  socket.on("transform-element", (payload) => {
+    if (!userId || !users.has(userId)) return;
+    const me = users.get(userId);
+    if (!me.partnerId) return;
+    const partner = users.get(me.partnerId);
+    if (partner?.socketId) {
+      io.to(partner.socketId).emit("transform-element", payload);
+    }
+  });
+
+  socket.on("delete-element", (payload) => {
+    if (!userId || !users.has(userId)) return;
+    const me = users.get(userId);
+    if (!me.partnerId) return;
+    const partner = users.get(me.partnerId);
+    if (partner?.socketId) {
+      io.to(partner.socketId).emit("delete-element", payload);
+    }
+  });
+
   socket.on("clear-canvas", () => {
     if (!userId || !users.has(userId)) return;
     const me = users.get(userId);
